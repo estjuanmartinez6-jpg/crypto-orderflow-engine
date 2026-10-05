@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environments & Keys
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Data dumps & Large CSVs
+data/historical/ETHUSDT-aggTrades-*.csv
+*.zip
+*.tar.gz
+logs/*.log
+logs/*.csv
+
+# OS & IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.qodo/

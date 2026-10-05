@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETH Order Flow — Readiness</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap');
+  :root {
+    --bg:#080c10; --bg2:#0d1218; --bg3:#121820; --border:#1e2830;
+    --text:#c8d4dc; --dim:#506070; --faint:#2a3840;
+    --go:#00e5a0; --go-dim:#003d2b;
+    --warn:#f0b429; --warn-dim:#3d2e00;
+    --stop:#f04060; --stop-dim:#3d1020;
+    --blue:#40a0ff; --blue-dim:#0a1e3d;
+    --mono:'Space Mono',monospace; --sans:'Syne',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;min-height:100vh;padding:20px 24px;}
+  body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);pointer-events:none;z-index:999;}
+
+  /* Header */
+  .hdr{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border);}
+  .hdr h1{font-family:var(--sans);font-size:20px;font-weight:800;color:#fff;letter-spacing:-.5px;}
+  .hdr .sub{font-size:10px;color:var(--dim);margin-top:3px;letter-spacing:1px;text-transform:uppercase;}
+  .pb{text-align:right;}
+  #cur{font-family:var(--sans);font-size:30px;font-weight:700;color:#fff;letter-spacing:-1px;}
+  #chg{font-size:12px;margin-top:2px;}
+
+  /* VP Block — hero */
+  .vpb{border:1px solid var(--border);border-radius:4px;padding:18px 22px;margin-bottom:12px;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;position:relative;overflow:hidden;transition:border-color .4s,background .4s;}
+  .vpb::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;transition:background .4s;}
+  .vpb.go{background:rgba(0,229,160,.05);border-color:rgba(0,229,160,.35);}
+  .vpb.go::before{background:var(--go);}
+  .vpb.warn{background:rgba(240,180,41,.04);border-color:rgba(240,180,41,.3);}
+  .vpb.warn::before{background:var(--warn);}
+  .vpb.stop{background:rgba(240,64,96,.05);border-color:rgba(240,64,96,.3);}
+  .vpb.stop::before{background:var(--stop);}
+  .vp-lbl{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-bottom:7px;}
+  .vp-badge{display:inline-block;font-family:var(--sans);font-size:14px;font-weight:700;padding:4px 12px;border-radius:3px;margin-bottom:8px;}
+  .vpb.go   .vp-badge{background:var(--go-dim);color:var(--go);}
+  .vpb.warn .vp-badge{background:var(--warn-dim);color:var(--warn);}
+  .vpb.stop .vp-badge{background:var(--stop-dim);color:var(--stop);}
+  .vp-desc{font-size:12px;color:var(--text);line-height:1.65;max-width:680px;}
+
+  /* VP levels visual */
+  .vp-vis{width:130px;display:flex;flex-direction:column;gap:6px;align-items:flex-end;}
+  .vp-row{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--dim);white-space:nowrap;}
+  .vp-row .ll{min-width:30px;text-align:right;font-weight:700;}
+  .vp-row.vah .ll{color:var(--go);}
+  .vp-row.poc .ll{color:var(--warn);}
+  .vp-row.val .ll{color:var(--stop);}
+  .vp-row.cur .ll{color:var(--blue);}
+  .vp-bar{height:2px;border-radius:1px;min-width:4px;}
+  .vp-row.vah .vp-bar{background:var(--go);}
+  .vp-row.poc .vp-bar{background:var(--warn);}
+  .vp-row.val .vp-bar{background:var(--stop);}
+  .vp-row.cur .vp-bar{background:var(--blue);animation:pulse 1.2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  /* Verdict */
+  .vrd{border:1px solid var(--border);border-radius:4px;padding:14px 22px;margin-bottom:12px;display:flex;align-items:center;gap:18px;transition:border-color .4s,background .4s;}
+  .vrd.go{background:rgba(0,229,160,.04);border-color:rgba(0,229,160,.25);}
+  .vrd.warn{background:rgba(240,180,41,.04);border-color:rgba(240,180,41,.25);}
+  .vrd.stop{background:rgba(240,64,96,.04);border-color:rgba(240,64,96,.25);}
+  .vi{font-family:var(--sans);font-size:26px;font-weight:800;min-width:60px;}
+  .vrd.go .vi{color:var(--go);} .vrd.warn .vi{color:var(--warn);} .vrd.stop .vi{color:var(--stop);}
+  .vt h2{font-family:var(--sans);font-size:15px;font-weight:700;color:#fff;}
+  .vt p{font-size:11px;color:var(--dim);margin-top:3px;line-height:1.6;max-width:640px;}
+  .vs{margin-left:auto;text-align:center;min-width:70px;}
+  .vn{font-family:var(--sans);font-size:34px;font-weight:800;line-height:1;}
+  .vrd.go .vn{color:var(--go);} .vrd.warn .vn{color:var(--warn);} .vrd.stop .vn{color:var(--stop);}
+  .vsl{font-size:9px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-top:2px;}
+
+  /* Sessions */
+  .ses{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+  .sc{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:9px 13px;display:flex;align-items:center;gap:9px;}
+  .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .dot.on{background:var(--go);box-shadow:0 0 7px var(--go);}
+  .dot.off{background:var(--faint);}
+  .sn{font-size:11px;font-weight:700;color:#fff;font-family:var(--sans);}
+  .sh{font-size:10px;color:var(--dim);margin-top:1px;}
+
+  /* Metric grid */
+  .g5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px;}
+  .mc{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:13px 13px 10px;position:relative;overflow:hidden;}
+  .mc::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;transition:background .4s;}
+  .mc.green::after{background:var(--go);} .mc.yellow::after{background:var(--warn);}
+  .mc.red::after{background:var(--stop);} .mc.blue::after{background:var(--blue);}
+  .mc.neutral::after{background:var(--faint);}
+  .ml{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-bottom:6px;}
+  .mv{font-family:var(--sans);font-size:17px;font-weight:700;color:#fff;margin-bottom:3px;}
+  .ms{font-size:10px;color:var(--dim);line-height:1.4;}
+  .mb{display:inline-block;font-size:9px;letter-spacing:.5px;padding:2px 6px;border-radius:2px;margin-top:5px;font-weight:700;}
+  .mc.green .mb{background:var(--go-dim);color:var(--go);} .mc.yellow .mb{background:var(--warn-dim);color:var(--warn);}
+  .mc.red .mb{background:var(--stop-dim);color:var(--stop);} .mc.neutral .mb{background:var(--bg3);color:var(--dim);}
+  .bt{height:3px;background:var(--bg3);border-radius:2px;margin-top:8px;overflow:hidden;}
+  .bf{height:100%;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1);}
+  .mc.green .bf{background:var(--go);} .mc.yellow .bf{background:var(--warn);}
+  .mc.red .bf{background:var(--stop);} .mc.neutral .bf{background:var(--dim);}
+
+  /* Recs */
+  .recs{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:14px 18px;}
+  .rt{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-bottom:10px;}
+  .ri{display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-bottom:1px solid var(--bg3);font-size:11px;line-height:1.55;color:var(--text);}
+  .ri:last-child{border-bottom:none;}
+  .rm{width:15px;height:15px;border-radius:2px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;margin-top:1px;}
+  .rm.ok{background:var(--go-dim);color:var(--go);} .rm.warn{background:var(--warn-dim);color:var(--warn);} .rm.bad{background:var(--stop-dim);color:var(--stop);}
+
+  /* Footer */
+  .ftr{display:flex;align-items:center;justify-content:space-between;padding-top:14px;margin-top:14px;border-top:1px solid var(--border);font-size:10px;color:var(--faint);}
+  #upd{color:var(--dim);}
+  .rb{background:var(--bg3);border:1px solid var(--border);border-radius:3px;color:var(--dim);font-family:var(--mono);font-size:11px;padding:5px 13px;cursor:pointer;transition:border-color .2s,color .2s;}
+  .rb:hover{border-color:var(--blue);color:var(--blue);}
+
+  /* Loader */
+  .ldr{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:500;transition:opacity .4s;}
+  .ldr.h{opacity:0;pointer-events:none;}
+  .lt{font-family:var(--sans);font-size:13px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;}
+  .lb{width:180px;height:2px;background:var(--bg3);border-radius:1px;overflow:hidden;}
+  .lf{height:100%;background:var(--blue);animation:lp 1.5s ease-in-out infinite;}
+  @keyframes lp{0%{width:0%;margin-left:0%}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}
+  .blink{animation:blink 2s ease-in-out infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+  @media(max-width:900px){.g5{grid-template-columns:repeat(3,1fr);}.ses{grid-template-columns:1fr 1fr;}.vp-vis{display:none;}}
+</style>
+</head>
+<body>
+
+<div class="ldr" id="ldr"><div class="lt">Consultando Binance</div><div class="lb"><div class="lf"></div></div></div>
+
+<div class="hdr">
+  <div><h1>ETH / ORDER FLOW READINESS</h1><div class="sub">Análisis de condiciones · Binance Futures ETHUSDT Perp · auto-refresh 30s</div></div>
+  <div class="pb"><div id="cur">—</div><div id="chg" style="color:var(--dim)">cargando...</div></div>
+</div>
+
+<!-- VP Block: filtro principal -->
+<div class="vpb stop" id="vpb">
+  <div>
+    <div class="vp-lbl">▶ Filtro principal · Volume Profile · posición del precio respecto al Value Area</div>
+    <div class="vp-badge" id="vp-badge">—</div>
+    <div class="vp-desc" id="vp-desc">Calculando Volume Profile de la sesión (24h de velas de 5min)...</div>
+  </div>
+  <div class="vp-vis" id="vp-vis">
+    <div class="vp-row vah"><span class="ll">VAH</span><div class="vp-bar" id="lb-vah" style="width:60px"></div><span id="tv-vah">—</span></div>
+    <div class="vp-row cur"><span class="ll">NOW</span><div class="vp-bar" id="lb-cur" style="width:40px"></div><span id="tv-cur">—</span></div>
+    <div class="vp-row poc"><span class="ll">POC</span><div class="vp-bar" id="lb-poc" style="width:80px"></div><span id="tv-poc">—</span></div>
+    <div class="vp-row val"><span class="ll">VAL</span><div class="vp-bar" id="lb-val" style="width:50px"></div><span id="tv-val">—</span></div>
+  </div>
+</div>
+
+<!-- Veredicto combinado -->
+<div class="vrd stop" id="vrd">
+  <div class="vi" id="vi">—</div>
+  <div class="vt"><h2 id="vt-h">Analizando...</h2><p id="vt-p">Obteniendo datos.</p></div>
+  <div class="vs"><div class="vn" id="vn">—</div><div class="vsl">/ 100</div></div>
+</div>
+
+<!-- Sesiones -->
+<div class="ses">
+  <div class="sc"><div class="dot off" id="d-as"></div><div><div class="sn">ASIA</div><div class="sh">00:00–09:00 UTC</div></div></div>
+  <div class="sc"><div class="dot off" id="d-lo"></div><div><div class="sn">LONDRES</div><div class="sh">07:00–16:00 UTC</div></div></div>
+  <div class="sc"><div class="dot off" id="d-ny"></div><div><div class="sn">NUEVA YORK</div><div class="sh">13:00–22:00 UTC</div></div></div>
+  <div class="sc"><div class="dot off" id="d-ov"></div><div><div class="sn">OVERLAP LON/NY</div><div class="sh">13:00–16:00 UTC ★</div></div></div>
+</div>
+
+<!-- Métricas secundarias -->
+<div class="g5">
+  <div class="mc neutral" id="c-vol"><div class="ml">Volumen 2h vs Promedio</div><div class="mv" id="v-vol">—</div><div class="ms" id="s-vol">—</div><div class="mb" id="b-vol">—</div><div class="bt"><div class="bf" id="f-vol" style="width:0%"></div></div></div>
+  <div class="mc neutral" id="c-atr"><div class="ml">Volatilidad · ATR 5min</div><div class="mv" id="v-atr">—</div><div class="ms" id="s-atr">—</div><div class="mb" id="b-atr">—</div><div class="bt"><div class="bf" id="f-atr" style="width:0%"></div></div></div>
+  <div class="mc neutral" id="c-spr"><div class="ml">Spread Bid/Ask</div><div class="mv" id="v-spr">—</div><div class="ms" id="s-spr">—</div><div class="mb" id="b-spr">—</div><div class="bt"><div class="bf" id="f-spr" style="width:0%"></div></div></div>
+  <div class="mc neutral" id="c-dlt"><div class="ml">Delta Flujo · Última hora</div><div class="mv" id="v-dlt">—</div><div class="ms" id="s-dlt">—</div><div class="mb" id="b-dlt">—</div><div class="bt"><div class="bf" id="f-dlt" style="width:0%"></div></div></div>
+  <div class="mc neutral" id="c-ses"><div class="ml">Sesión Activa</div><div class="mv" id="v-ses">—</div><div class="ms" id="s-ses">—</div><div class="mb" id="b-ses">—</div><div class="bt"><div class="bf" id="f-ses" style="width:0%"></div></div></div>
+</div>
+
+<!-- Análisis -->
+<div class="recs"><div class="rt">Análisis detallado</div><div id="recs"><div class="ri"><div class="rm warn">·</div><span>Cargando datos de Binance...</span></div></div></div>
+
+<div class="ftr">
+  <div><span class="blink" style="color:var(--go)">●</span> &nbsp;BINANCE FUTURES · ETHUSDT &nbsp;·&nbsp; <span id="upd">—</span></div>
+  <button class="rb" onclick="load()">↻ Actualizar</button>
+</div>
+
+<script>
+const B='https://fapi.binance.com';
+const $=id=>document.getElementById(id);
+const fmt=(n,d=2)=>Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+async function get(u){const r=await fetch(u);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}
+
+function computeVP(klines,tick=0.1,va=0.70){
+  const closes=klines.map(k=>parseFloat(k[4]));
+  const mid=(Math.max(...closes)+Math.min(...closes))/2;
+  const half=150,pMin=mid-half,pMax=mid+half;
+  const nb=Math.max(Math.round((pMax-pMin)/tick),1);
+  const bv=new Array(nb).fill(0);
+  const bc=Array.from({length:nb},(_,i)=>pMin+(i+0.5)*tick);
+  for(const k of klines){
+    const tp=(parseFloat(k[2])+parseFloat(k[3])+parseFloat(k[4]))/3;
+    const v=parseFloat(k[5]);
+    const idx=Math.min(Math.max(Math.floor((tp-pMin)/tick),0),nb-1);
+    bv[idx]+=v;
+  }
+  const pi=bv.indexOf(Math.max(...bv));
+  const poc=bc[pi];
+  const tot=bv.reduce((a,b)=>a+b,0);
+  let acc=bv[pi],hi=pi,lo=pi;
+  while(acc<tot*va){
+    const vu=hi+1<nb?bv[hi+1]:-1,vd=lo-1>=0?bv[lo-1]:-1;
+    if(vu<0&&vd<0)break;
+    if(vu>=vd){hi++;acc+=vu;}else{lo--;acc+=vd;}
+  }
+  return{poc,vah:bc[hi],val:bc[lo]};
+}
+
+function updateSes(){
+  const h=new Date().getUTCHours()+new Date().getUTCMinutes()/60;
+  const on=id=>{$(id).className='dot on';};
+  const off=id=>{$(id).className='dot off';};
+  const asia=h>=0&&h<9,lon=h>=7&&h<16,ny=h>=13&&h<22,ov=h>=13&&h<16;
+  asia?on('d-as'):off('d-as');lon?on('d-lo'):off('d-lo');
+  ny?on('d-ny'):off('d-ny');ov?on('d-ov'):off('d-ov');
+  return{asia,lon,ny,ov,h};
+}
+
+function card(id,cls,val,sub,badge,pct){
+  $('c-'+id).className='mc '+cls;
+  $('v-'+id).textContent=val;$('s-'+id).textContent=sub;$('b-'+id).textContent=badge;
+  $('f-'+id).style.width=Math.min(100,Math.max(0,pct))+'%';
+}
+
+async function load(){
+  $('ldr').classList.remove('h');
+  try{
+    const[tk,k5m,depth]=await Promise.all([
+      get(`${B}/fapi/v1/ticker/24hr?symbol=ETHUSDT`),
+      get(`${B}/fapi/v1/klines?symbol=ETHUSDT&interval=5m&limit=288`),
+      get(`${B}/fapi/v1/depth?symbol=ETHUSDT&limit=20`),
+    ]);
+
+    const price=parseFloat(tk.lastPrice),chg=parseFloat(tk.priceChangePercent),vol24=parseFloat(tk.quoteVolume);
+    $('cur').textContent='$'+fmt(price);
+    $('chg').textContent=(chg>=0?'+':'')+chg.toFixed(2)+'% (24h)';
+    $('chg').style.color=chg>=0?'var(--go)':'var(--stop)';
+
+    // ── VOLUME PROFILE ───────────────────────────────────────────────────
+    const vp=computeVP(k5m,0.10,0.70);
+    const inVA=price>=vp.val&&price<=vp.vah;
+    const aboveVAH=price>vp.vah;
+    const dVAH=((price-vp.vah)/vp.vah*100);
+    const dVAL=((price-vp.val)/vp.val*100);
+
+    // VP visual — relative position bars
+    const lo=vp.val-(vp.vah-vp.val)*0.15;
+    const hi=vp.vah+(vp.vah-vp.val)*0.15;
+    const rng=hi-lo||1;
+    const barW=p=>Math.max(4,Math.min(100,((p-lo)/rng)*100))+'px';
+    $('tv-vah').textContent='$'+fmt(vp.vah);$('lb-vah').style.width=barW(vp.vah);
+    $('tv-poc').textContent='$'+fmt(vp.poc);$('lb-poc').style.width=barW(vp.poc);
+    $('tv-val').textContent='$'+fmt(vp.val);$('lb-val').style.width=barW(vp.val);
+    $('tv-cur').textContent='$'+fmt(price); $('lb-cur').style.width=barW(price);
+
+    // VP block state
+    let vpCls,vpBadge,vpDesc,vpScore;
+    if(inVA){
+      const pct=((price-vp.val)/(vp.vah-vp.val)*100).toFixed(0);
+      vpCls='stop';
+      vpBadge='DENTRO DEL VALUE AREA — EL SISTEMA NO OPERA AQUÍ';
+      vpDesc=`$${fmt(price)} está dentro del VA (VAL $${fmt(vp.val)} → VAH $${fmt(vp.vah)} · POC $${fmt(vp.poc)}). `+
+             `La Capa 1 del sistema (Contexto) rechaza el 100% de las señales en esta zona — es ruido, no edge. `+
+             `Estás al ${pct}% del rango VA. Espera a que el precio rompa el VAH o el VAL con volumen.`;
+      vpScore=0;
+    } else if(aboveVAH){
+      vpCls='go';
+      vpBadge=`SOBRE VAH $${fmt(vp.vah)} (+${dVAH.toFixed(2)}%) → ZONA SHORT`;
+      vpDesc=`$${fmt(price)} está por encima del Value Area. El sistema busca señales SHORT de retorno al valor. `+
+             `TP1 en POC $${fmt(vp.poc)}, TP2 en VAL $${fmt(vp.val)}. `+
+             `Verifica delta negativo y absorción vendedora en el dashboard.`;
+      vpScore=85;
+    } else {
+      vpCls='go';
+      vpBadge=`BAJO VAL $${fmt(vp.val)} (${dVAL.toFixed(2)}%) → ZONA LONG`;
+      vpDesc=`$${fmt(price)} está por debajo del Value Area. El sistema busca señales LONG de retorno al valor. `+
+             `TP1 en POC $${fmt(vp.poc)}, TP2 en VAH $${fmt(vp.vah)}. `+
+             `Verifica delta positivo y absorción compradora en el dashboard.`;
+      vpScore=85;
+    }
+    $('vpb').className='vpb '+vpCls;
+    $('vp-badge').textContent=vpBadge;
+    $('vp-desc').textContent=vpDesc;
+
+    // ── VOLUMEN ──────────────────────────────────────────────────────────
+    const volH=vol24/24;
+    const r24=k5m.slice(-24);
+    const vol2h=r24.reduce((s,k)=>s+parseFloat(k[7]),0);
+    const vr=vol2h/(volH*2);
+    const vs=Math.min(100,vr*60);
+    let vc,vb;
+    if(vr>=1.5){vc='green';vb='ALTO ↑';}
+    else if(vr>=0.8){vc='green';vb='NORMAL';}
+    else if(vr>=0.5){vc='yellow';vb='BAJO ↓';}
+    else{vc='red';vb='MUY BAJO';}
+    card('vol',vc,fmt(vol2h/1e6,2)+'M USDT',`${fmt(vol2h/1e6,2)}M · ${fmt(vr,1)}× promedio`,vb,vs);
+
+    // ── ATR ──────────────────────────────────────────────────────────────
+    let tr=0;
+    for(let i=1;i<r24.length;i++){
+      const h=parseFloat(r24[i][2]),l=parseFloat(r24[i][3]),pc=parseFloat(r24[i-1][4]);
+      tr+=Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc));
+    }
+    const atr=tr/(r24.length-1);
+    let ac,ab,asc;
+    if(atr<0.5){ac='red';ab='PLANO';asc=15;}
+    else if(atr<1.5){ac='yellow';ab='BAJO';asc=45;}
+    else if(atr<=8){ac='green';ab='IDEAL';asc=90;}
+    else if(atr<=15){ac='yellow';ab='ALTO';asc=55;}
+    else{ac='red';ab='EXTREMO';asc=10;}
+    card('atr',ac,'$'+fmt(atr),`ATR $${fmt(atr)} por vela 5min`,ab,asc);
+
+    // ── SPREAD ───────────────────────────────────────────────────────────
+    const bid=parseFloat(depth.bids[0][0]),ask=parseFloat(depth.asks[0][0]);
+    const sp=(ask-bid)/((bid+ask)/2)*100;
+    const bv10=depth.bids.slice(0,10).reduce((s,l)=>s+parseFloat(l[1]),0);
+    const av10=depth.asks.slice(0,10).reduce((s,l)=>s+parseFloat(l[1]),0);
+    const imb=(bv10-av10)/(bv10+av10);
+    const spBps=sp*100;
+    let sc,sb,ssc;
+    if(spBps<0.5){sc='green';sb='TIGHT';ssc=95;}
+    else if(spBps<1){sc='green';sb='NORMAL';ssc=75;}
+    else if(spBps<2){sc='yellow';sb='AMPLIO';ssc=45;}
+    else{sc='red';sb='MUY AMPLIO';ssc=15;}
+    card('spr',sc,sp.toFixed(4)+'%',`Spread ${spBps.toFixed(2)} bps · Imbalance ${(imb*100).toFixed(1)}%`,sb,ssc);
+
+    // ── DELTA ────────────────────────────────────────────────────────────
+    const l12=k5m.slice(-12);
+    let buyV=0,sellV=0;
+    for(const k of l12){const v=parseFloat(k[5]),tbv=parseFloat(k[9]);buyV+=tbv;sellV+=(v-tbv);}
+    const dPct=(buyV+sellV)>0?(buyV-sellV)/(buyV+sellV)*100:0;
+    const adp=Math.abs(dPct);
+    let dc,db,dsc;
+    if(adp>=20){dc=dPct>0?'green':'red';db=dPct>0?'COMPRADOR':'VENDEDOR';dsc=85;}
+    else if(adp>=10){dc='yellow';db='PARCIAL';dsc=55;}
+    else{dc='yellow';db='NEUTRO';dsc=40;}
+    card('dlt',dc,dPct.toFixed(1)+'%',`${dPct.toFixed(1)}% delta · última hora`,db,dsc);
+
+    // ── SESIÓN ───────────────────────────────────────────────────────────
+    const ses=updateSes();
+    const utc=new Date().toUTCString().slice(17,25);
+    let sesc,sesb,sessc;
+    if(ses.ov){sesc='green';sesb='OVERLAP ★';sessc=100;}
+    else if(ses.ny&&ses.lon){sesc='green';sesb='LON+NY';sessc=90;}
+    else if(ses.ny){sesc='green';sesb='NY ACTIVA';sessc=80;}
+    else if(ses.lon){sesc='green';sesb='LONDRES';sessc=75;}
+    else if(ses.asia){sesc='yellow';sesb='ASIA';sessc=50;}
+    else{sesc='red';sesb='CIERRE';sessc=15;}
+    card('ses',sesc,utc+' UTC',`${sesb} · ${utc} UTC`,sesb,sessc);
+
+    // ── SCORE TOTAL ──────────────────────────────────────────────────────
+    // Si precio en VA: VP domina con peso 40% fijo en 0 → máximo ~60
+    // Si precio fuera VA: VP da 85 con peso 40% → score alto posible
+    let total;
+    if(inVA){
+      total=vs*0.20+asc*0.15+ssc*0.10+dsc*0.10+ssc*0.05;
+    } else {
+      total=vpScore*0.40+vs*0.15+asc*0.15+ssc*0.10+dsc*0.12+sessc*0.08;
+    }
+
+    // ── VEREDICTO ────────────────────────────────────────────────────────
+    const v=$('vrd'),vi=$('vi'),vh=$('vt-h'),vp2=$('vt-p');
+    $('vn').textContent=Math.round(total);
+    if(inVA){
+      v.className='vrd stop';vi.textContent='ESPERA';
+      vh.textContent='Precio dentro del VA — el sistema no puede operar';
+      vp2.textContent=`VAL $${fmt(vp.val)} ← precio ← VAH $${fmt(vp.vah)} · POC $${fmt(vp.poc)}. `+
+        (dPct<-10?`Delta ${dPct.toFixed(1)}% bajista — vigilar ruptura del VAL.`:
+         dPct>10?`Delta ${dPct.toFixed(1)}% alcista — vigilar ruptura del VAH.`:
+         'Delta neutro. Espera movimiento con volumen.');
+    } else if(total>=65){
+      v.className='vrd go';vi.textContent='GO';
+      vh.textContent='Condiciones favorables — el sistema puede generar señales';
+      vp2.textContent=`Precio fuera del VA · contexto ${aboveVAH?'SHORT':'LONG'}. `+
+        `Verifica en el dashboard que el delta sea ${aboveVAH?'negativo':'positivo'} y la absorción esté activa.`;
+    } else if(total>=40){
+      v.className='vrd warn';vi.textContent='PRECAUCIÓN';
+      vh.textContent='Condiciones mixtas — opera con cuidado';
+      vp2.textContent='Precio fuera del VA pero condiciones secundarias débiles (volumen, sesión o spread).';
+    } else {
+      v.className='vrd stop';vi.textContent='NO';
+      vh.textContent='Condiciones desfavorables a pesar de estar fuera del VA';
+      vp2.textContent='Precio fuera del VA pero volumen/sesión/spread no son adecuados para order flow.';
+    }
+
+    // ── RECOMENDACIONES ──────────────────────────────────────────────────
+    const recs=[];
+    if(inVA){
+      recs.push({t:'bad',m:`DENTRO DEL VALUE AREA: el sistema rechaza el 100% de señales aquí. La Capa 1 (Contexto) bloquea todo cuando el precio está entre VAL $${fmt(vp.val)} y VAH $${fmt(vp.vah)}. Esta zona es ruido — no hay edge posicional.`});
+      recs.push({t:'warn',m:`Señales a vigilar: si el precio toca VAL $${fmt(vp.val)} con delta negativo fuerte → posible SHORT. Si toca VAH $${fmt(vp.vah)} con delta positivo → posible LONG. El sistema se activará automáticamente al romper el VA.`});
+      recs.push({t:'warn',m:`Delta de flujo actual: ${dPct.toFixed(1)}%. ${Math.abs(dPct)<10?'Neutral — mercado sin dirección dominante.':dPct>0?`Alcista — presión compradora. Si el VAH ($${fmt(vp.vah)}) cede con delta positivo, señal LONG posible.`:`Bajista — presión vendedora. Si el VAL ($${fmt(vp.val)}) cede con delta negativo, señal SHORT posible.`}`});
+    } else if(aboveVAH){
+      recs.push({t:'ok',m:`Precio sobre VAH $${fmt(vp.vah)} (+${dVAH.toFixed(2)}%). Contexto SHORT activo. El sistema buscará señales de regreso al valor. TP1 esperado en POC $${fmt(vp.poc)}, TP2 en VAL $${fmt(vp.val)}.`});
+      if(dPct<-10) recs.push({t:'ok',m:`Delta ${dPct.toFixed(1)}% bajista confirma el contexto SHORT. La Capa 2 (Setup) debería validar.`});
+      else recs.push({t:'warn',m:`Delta ${dPct.toFixed(1)}% no confirma fuertemente el SHORT. La Capa 2 puede rechazar la señal si el delta corto (20s) no es negativo.`});
+    } else {
+      recs.push({t:'ok',m:`Precio bajo VAL $${fmt(vp.val)} (${dVAL.toFixed(2)}%). Contexto LONG activo. El sistema buscará señales de regreso al valor. TP1 esperado en POC $${fmt(vp.poc)}, TP2 en VAH $${fmt(vp.vah)}.`});
+      if(dPct>10) recs.push({t:'ok',m:`Delta ${dPct.toFixed(1)}% alcista confirma el contexto LONG. La Capa 2 (Setup) debería validar.`});
+      else recs.push({t:'warn',m:`Delta ${dPct.toFixed(1)}% no confirma fuertemente el LONG. La Capa 2 puede rechazar la señal si el delta corto (20s) no es positivo.`});
+    }
+    if(vr>=0.8) recs.push({t:'ok',m:`Volumen ${fmt(vr,1)}× el promedio — liquidez suficiente para fills limpios y absorción detectable.`});
+    else recs.push({t:'warn',m:`Volumen bajo (${fmt(vr,1)}× promedio). El detector de absorción puede generar falsas positivas. Slippage puede ser mayor que en backtest.`});
+    if(atr>=1.5&&atr<=8) recs.push({t:'ok',m:`ATR $${fmt(atr)} — rango ideal. VAH y VAL tienen separación suficiente para R:R ≥ 1.5.`});
+    else if(atr<1.5) recs.push({t:'warn',m:`ATR $${fmt(atr)} — mercado plano. Los niveles VP están comprimidos y el R:R será bajo.`});
+    else recs.push({t:'warn',m:`ATR $${fmt(atr)} — alta volatilidad. El volatility scaling reducirá el tamaño de posición al 50% automáticamente.`});
+    if(Math.abs(imb)>=0.35) recs.push({t:'ok',m:`Imbalance del libro ${(imb*100).toFixed(1)}% — presión ${imb>0?'compradora':'vendedora'} clara en top 10 niveles.`});
+    else recs.push({t:'warn',m:`Imbalance del libro ${(imb*100).toFixed(1)}% — neutral. Los market makers no tienen posición clara.`});
+    if(sessc>=75) recs.push({t:'ok',m:`Sesión ${sesb} activa. Liquidez institucional presente — los niveles VP son más respetados.`});
+    else recs.push({t:'warn',m:`Sesión débil (${sesb}). Los niveles del Volume Profile pueden no respetarse con la misma precisión.`});
+
+    $('recs').innerHTML=recs.map(r=>`<div class="ri"><div class="rm ${r.t}">${r.t==='ok'?'✓':r.t==='warn'?'!':'✗'}</div><span>${r.m}</span></div>`).join('');
+    $('upd').textContent='Actualizado: '+new Date().toLocaleTimeString('es-CO',{timeZone:'America/Bogota'})+' (Bogotá)';
+
+  }catch(e){
+    $('vrd').className='vrd stop';$('vi').textContent='!';
+    $('vt-h').textContent='Error al conectar con Binance';
+    $('vt-p').textContent=e.message;$('vn').textContent='—';
+    console.error(e);
+  }finally{
+    $('ldr').classList.add('h');
+  }
+}
+
+load();
+setInterval(load,30000);
+</script>
+</body>
+</html>
