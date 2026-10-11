@@ -13,6 +13,12 @@ Unlike traditional bots that rely on lagging technical indicators (RSI, MACD, Mo
 
 ---
 
+## 🖥️ Market Microstructure Analyzer Interface
+
+![Crypto Order Flow Analyzer Dashboard](preview.png)
+
+---
+
 ## 🤖 Multi-Agent Microstructure Architecture
 
 This system operates as a specialized **Agentic Multi-Layer Pipeline**, where autonomous perception and reasoning modules convert raw WebSocket data into institutional alpha:
